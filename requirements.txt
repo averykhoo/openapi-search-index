@@ -1,3 +1,4 @@
-Whoosh
+# Whoosh
 openapi-schema-pydantic
 datamodel-code-generator
+pydantic
