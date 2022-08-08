@@ -10,16 +10,31 @@ from urllib.parse import quote
 from pydantic import BaseModel
 
 
+def string_similarity(str1, str2):
+    return sum(word in str2.casefold().split() for word in str1.casefold().split())
+
+
 @dataclass
 class Document:
     path: str
-    docs_paths: Tuple[str]
-    operation: str
-    name: str
+    docs_fragments: Tuple[str]
+    api_name: str
     summary: str
     description: str
     parameters: Tuple[Tuple[str, str]]
     tags: Tuple[str]
+    operation: str
+
+    def match(self, query):
+        return (
+            string_similarity(query, self.api_name),
+            max(string_similarity(query, self.summary),
+                string_similarity(query, self.description),
+                string_similarity(query, self.path)),
+            sum(string_similarity(query, ' '.join(param)) for param in self.parameters),
+            string_similarity(query, ' '.join(self.tags)),
+            string_similarity(query, self.operation)
+        )
 
 
 class Info(BaseModel):
@@ -28,29 +43,12 @@ class Info(BaseModel):
     summary: Optional[str] = None
 
 
-# not super useful
-# class Server(BaseModel):
-#     url: str
-#     description: Optional[str] = None
-
-
-# not useful at all
-# class Ref(BaseModel):
-#     ref: str = Field(alias="$ref")
-
-
 class Parameter(BaseModel):
     name: Optional[str] = None  # make this optional so it parses refs too
     description: Optional[str] = None
 
 
-# not super useful
-# class Response(BaseModel):
-#     description: str
-
-
 class Operation(BaseModel):
-    # responses: Dict[str, Union[Response, Ref]]
     tags: Optional[List[str]] = None
     summary: Optional[str] = None
     description: Optional[str] = None
@@ -61,7 +59,6 @@ class Operation(BaseModel):
 class PathItem(BaseModel):
     summary: Optional[str] = None
     description: Optional[str] = None
-    # servers: Optional[List[Server]] = None
     get: Optional[Operation] = None
     put: Optional[Operation] = None
     post: Optional[Operation] = None
@@ -76,22 +73,19 @@ class OpenAPI(BaseModel):
     info: Info
     paths: Dict[str, PathItem]
 
-    # servers: Optional[List[Server]] = None
-    # components: Optional[Dict[str, Dict[str, Any]]]
-
     def get_documents(self):
         all_tags: Set[str] = set()
 
         for api_path, api_path_item in self.paths.items():
-            summary = (api_path_item.summary or '').strip() or None
-            description = (api_path_item.description or '').strip() or None
+            summary = (api_path_item.summary or '').strip() or ''
+            description = (api_path_item.description or '').strip() or ''
 
             def _create_document(op_name: str, op: Operation):
-                docs_paths = []
+                docs_fragments = []
                 for tag in (op.tags or ['default']):
                     all_tags.add(tag)
                     if op.operationId:
-                        docs_paths.append(f'#/{quote(tag)}/{quote(op.operationId)}')
+                        docs_fragments.append(f'#/{quote(tag)}/{quote(op.operationId)}')
                 params = []
                 for param in (op.parameters or []):
                     _name = (param.name or '').strip()
@@ -99,9 +93,9 @@ class OpenAPI(BaseModel):
                     if _name or _description:
                         params.append((_name, _description))
                 return Document(api_path,
-                                docs_paths=tuple(docs_paths),
+                                docs_fragments=tuple(docs_fragments),
                                 operation=op_name,
-                                name='',
+                                api_name=self.info.title.strip(),
                                 summary=(op.summary or '').strip() or summary,
                                 description=(op.description or '').strip() or description,
                                 tags=tuple(op.tags) if op.tags else tuple(),
@@ -110,11 +104,11 @@ class OpenAPI(BaseModel):
 
             if summary or description:
                 yield Document(api_path,
-                               docs_paths=tuple(),
+                               docs_fragments=tuple(),
                                summary=summary,
                                description=description,
                                operation='op_name',
-                               name='',
+                               api_name=self.info.title.strip(),
                                tags=tuple(),
                                parameters=tuple(),
                                )
@@ -136,8 +130,8 @@ class OpenAPI(BaseModel):
                 yield _create_document('TRACE', api_path_item.trace)
 
         yield Document('/',
-                       docs_paths=tuple(['#']),
-                       name=self.info.title.strip(),
+                       docs_fragments=tuple(['#']),
+                       api_name=self.info.title.strip(),
                        summary=(self.info.summary or '').strip(),
                        description=(self.info.description or '').strip(),
                        tags=tuple(all_tags),
@@ -147,5 +141,7 @@ class OpenAPI(BaseModel):
 
 
 if __name__ == '__main__':
-    pprint(list(OpenAPI.parse_file('test-petstore.json').get_documents()))
-    pprint(list(OpenAPI.parse_file('test-uspto.json').get_documents()))
+    pprint(sorted(list(OpenAPI.parse_file('test-petstore.json').get_documents()) +
+                  list(OpenAPI.parse_file('test-uspto.json').get_documents()),
+                  key=lambda d: d.match('create new pet in store'),
+                  reverse=True))
