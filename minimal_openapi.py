@@ -10,8 +10,8 @@ from urllib.parse import quote
 from pydantic import BaseModel
 
 
-def string_similarity(str1, str2):
-    return sum(word in str2.casefold().split() for word in str1.casefold().split())
+def string_similarity(query, text):
+    return sum(word in text.casefold() for word in query.casefold().split())
 
 
 @dataclass
@@ -21,9 +21,10 @@ class Document:
     api_name: str
     summary: str
     description: str
-    parameters: Tuple[Tuple[str, str]]
-    tags: Tuple[str]
+    parameters: Tuple[Tuple[str, str]]  # (param name, param description)
+    tags: Tuple[str]  # maybe an optional tag instead?
     operation: str
+    # generate a dedupe id of some kind
 
     def match(self, query):
         return (
@@ -143,5 +144,5 @@ class OpenAPI(BaseModel):
 if __name__ == '__main__':
     pprint(sorted(list(OpenAPI.parse_file('test-petstore.json').get_documents()) +
                   list(OpenAPI.parse_file('test-uspto.json').get_documents()),
-                  key=lambda d: d.match('create new pet in store'),
+                  key=lambda d: d.match('create pet'),
                   reverse=True))
