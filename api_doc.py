@@ -46,6 +46,12 @@ class EndpointInfo:
 
     @property
     def content(self):
+        """
+        content optimized for search
+        it also happens to be valid markdown
+
+        :return:
+        """
         _content = []
         if self.service_title.strip():
             _content.append(f'# {self.service_title.strip()}')
@@ -66,11 +72,12 @@ class EndpointInfo:
 
         if _content and _content[-1]:
             _content.append('')
-        _content.append(tabulate.tabulate([(p.name, p.description) for p in self.endpoint_parameters],
-                                          headers=['', ''],
-                                          tablefmt='github'))
-        # for p in self.endpoint_parameters:
-        #     content.append(f'\t{p.name}\t:\t{p.description}')
+        if self.endpoint_parameters:
+            _content.append(tabulate.tabulate([(p.name, p.description) for p in self.endpoint_parameters],
+                                              headers=['', ''],
+                                              tablefmt='github'))
+            # for p in self.endpoint_parameters:
+            #     content.append(f'\t{p.name}\t:\t{p.description}')
 
         if _content and _content[-1]:
             _content.append('')
@@ -94,7 +101,7 @@ def parse_openapi(path: str, service_hostname: str):
     service_description = data.get('info', dict()).get('description', '').strip()
 
     all_tags = []
-    for path, path_item in data.get('paths', dict()).items():
+    for path, path_item in list(data.get('paths', dict()).items()) + list(data.get('webhooks', dict()).items()):
         path_tags = []
         path_summary = path_item.get('summary', '').strip()
         path_description = path_item.get('description', '').strip()
@@ -112,6 +119,10 @@ def parse_openapi(path: str, service_hostname: str):
             _parameters = [ParameterInfo(name=p.get('name', '').strip(),
                                          description=p.get('description', '').strip(),
                                          ) for p in parameters]
+
+            if operation.get('requestBody', dict()).get('description', '').strip():
+                _parameters.append(ParameterInfo(name='*BODY*',
+                                                 description=operation['requestBody']['description'].strip()))
 
             path_tags.extend(tags)
             yield EndpointInfo(service_hostname=service_hostname,
@@ -165,8 +176,11 @@ def parse_openapi(path: str, service_hostname: str):
 
 
 if __name__ == '__main__':
-    for endpoint_info in parse_openapi('test-uspto.json', 'uspto.example'):
+    # for endpoint_info in parse_openapi('test-uspto.json', 'uspto.example'):
     # for endpoint_info in parse_openapi('test-petstore.json', 'petstore.example'):
+    # for endpoint_info in parse_openapi('test-v2.0.json', 'swagger-v2.0.example'):
+    # for endpoint_info in parse_openapi('test-v3.1.json', 'openapi-v3.1.example'):
+    for endpoint_info in parse_openapi('test-link-example.json', 'link.example'):
         print()
         print('-' * 100)
         print()
