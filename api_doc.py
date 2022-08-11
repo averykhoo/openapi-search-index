@@ -1,21 +1,21 @@
 import json
-from dataclasses import dataclass
+
+from pydantic import BaseModel
+from pydantic.dataclasses import dataclass
 from typing import List
 from urllib.parse import quote
 
 import tabulate as tabulate
 
 
-@dataclass
-class ParameterInfo:
+class ParameterInfo(BaseModel):
     name: str
     description: str
 
 
 # service -> path -> endpoint -> param, tag
 
-@dataclass
-class EndpointInfo:
+class EndpointInfo(BaseModel):
     service_hostname: str
     service_title: str
     service_description: str
@@ -34,7 +34,7 @@ class EndpointInfo:
 
     @property
     def service_name(self):
-        return self.service_hostname.split('.', 1)[0]  # only works if deployed via rapid (no subdomains)
+        return self.service_hostname.split('.', 1)[0]  # only works if there are never any subdomains
 
     @property
     def openapi_fragment(self):
@@ -158,7 +158,7 @@ def parse_openapi(path: str, service_hostname: str):
 
         all_tags.extend(path_tags)
 
-    # we have a openapi spec with no paths that have verbs, so emit an endpoint with nothing
+    # we have an openapi spec with no paths that have verbs, so emit an endpoint with nothing
     if not list(filter(None, all_tags)):
         yield EndpointInfo(service_hostname=service_hostname,
                            service_title=service_title,
