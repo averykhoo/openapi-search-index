@@ -1,11 +1,9 @@
 import json
-
-from pydantic import BaseModel
-from pydantic.dataclasses import dataclass
 from typing import List
 from urllib.parse import quote
 
 import tabulate as tabulate
+from pydantic import BaseModel
 
 
 class ParameterInfo(BaseModel):
